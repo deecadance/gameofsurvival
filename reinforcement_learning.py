@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 # coding: utf-8
 
 
@@ -21,11 +22,12 @@ p_fuzzy = 1.0/world_size/world_size     ### Note that approx. P(1 switch) = worl
 alive = 1              ### Def. 1 alive and 0 dead 
 dead = 0               ###
 
+
+# In[2]:
+
 from IPython import display
 import numpy as np
-import matplotlib as mtplt
 import matplotlib.pyplot as plt
-mtplt.use('Qt5Agg')
 import matplotlib.animation as animation
 import time
 import copy
@@ -39,18 +41,19 @@ from gameofsurvival_libraries import get_neighbours, apply_rules, fuzzy_rules, c
 from gameofsurvival_libraries import alive_cells
 
 
+# In[3]:
+
+
 ### Generate world and group at random
-world = init_grid(world_size, filling)
-group = init_grid(group_size, filling)
+world = init_grid(world_size)
+group = init_grid(group_size)
 
 ### PLOT INITIAL STATE
 print("###STARTING WORLD CONFIGURATION###")
-#plt.ion()
 #plt.imshow(world)
-#plt.show(block=False)
-#time.sleep(2)
+#plt.show()
+#time.sleep(1)
 #plt.close()
-#plt.ioff()
 
 ### IMPORTING KERAS MODULES!
 import sys
@@ -62,6 +65,9 @@ from tensorflow.keras.callbacks import TensorBoard
 from rl.agents.dqn import DQNAgent
 from rl.policy import EpsGreedyQPolicy
 from rl.memory import SequentialMemory
+
+
+# In[5]:
 
 
 player = Sequential()
@@ -89,13 +95,13 @@ r_avg_list = []
 sight_index_1 = int((world_size-see_size)/2)
 sight_index_2 = int((world_size+see_size)/2)
 
-
-fig, ax = plt.subplots()
-plt.show(block=False)
+fig, ax = plt.subplots(figsize=(14, 12))
+fig.canvas.draw()
+img = ax.imshow(world, interpolation='none')
 action = np.zeros(group_size*group_size)
 
 for i in range(epochs):
-    world = init_grid(world_size, filling)     ### Initialize world
+    world = init_grid(world_size)     ### Initialize world
     alive_cells = grid_to_set(world)
     eps *= decay_factor               ### Decay probability of random action
     print("Epoch", i+1,  "of ", epochs)
@@ -138,11 +144,10 @@ for i in range(epochs):
         ### PLOT WORLD STATUS
         if i >= 0:
             alive_cells = grid_to_set(world)
+##            img.set_data(world)
 ##            display.clear_output(wait=True)
 ##            display.display(fig)
-##            time.sleep(0.00000001) 
-            ax.imshow(world)
-            fig.canvas.flush_events()
+##            time.sleep(0.00000001)
         if done == 1:
             break
     r_avg_list.append(r_sum / epochs)

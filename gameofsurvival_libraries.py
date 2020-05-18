@@ -5,7 +5,6 @@ import matplotlib.animation as animation
 import time
 import copy
 from matplotlib import rc
-from IPython import display
 import random
 
 
@@ -24,13 +23,13 @@ start = time.time()
 
 
 ### Function to generate a grid with random 1 and 0
-def init_grid(size): 
+def init_grid(size, filling): 
     return np.random.choice([0,1], size*size, p=[1-filling, filling]).reshape(size, size) 
 
 
 ### Generate world and group at random
-world = init_grid(world_size)
-group = init_grid(group_size)
+world = init_grid(world_size, filling)
+group = init_grid(group_size, filling)
 
 ### PLOT INITIAL STATE
 ##print("###STARTING WORLD CONFIGURATION###")
@@ -145,9 +144,14 @@ def calculate_reward(next_world, group_size):
     return reward
 
 ## CALCULATE EFFECT OF ACTION
-def calculate_action(action, old_world):
-    reshape_action = np.reshape(action,(group_size,group_size))
-    old_world[0:group_size,0:group_size] = np.mod(old_world[0:group_size,0:group_size] + reshape_action, 2)
+def calculate_action(action, old_world, world_size, group_size):
+#    reshape_action = np.reshape(action,(group_size,group_size))
+#    old_world[0:group_size,0:group_size] = np.mod(old_world[0:group_size,0:group_size] + reshape_action, 2)
+    group_index_1 = int((world_size-group_size)/2)
+    group_index_2 = int((world_size+group_size)/2)
+    y = action%group_size + group_index_1
+    x = int(action/group_size) + group_index_1
+    old_world[x,y] = (old_world[x,y]+1)%2
     return old_world
 
 
