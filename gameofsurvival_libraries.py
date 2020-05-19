@@ -136,12 +136,16 @@ def fuzzy_rules(alive_cells, world_size, p_fuzzy):
     return alive_cells
 
 ## CALCULATE REWARD
-def calculate_reward(next_world, group_size):
-    if not np.any(next_world):
+def calculate_reward(next_world, world_size, group_size):
+    group_index_1 = int((world_size-group_size)/2)
+    group_index_2 = int((world_size+group_size)/2)
+    if not np.any(next_world[group_index_1:group_index_2,group_index_1:group_index_2]):
         reward = -group_size*epochs
+        done = 1
     else:
         reward = np.sum(next_world[0:group_size,0:group_size])
-    return reward
+        done = 0
+    return reward, done
 
 ## CALCULATE EFFECT OF ACTION
 def calculate_action(action, old_world, world_size, group_size):
@@ -156,14 +160,14 @@ def calculate_action(action, old_world, world_size, group_size):
 
 
 ## FUNCTION WHICH MAKES THE TIME STEP
-def time_step(alive_cells, world_size, IsWorldFuzzy, p_fuzzy):
+def time_step(alive_cells, world_size, group_size, IsWorldFuzzy, p_fuzzy):
     done = 0
     old_world = set_to_grid(alive_cells, world_size)
     apply_rules(alive_cells, world_size)
     if IsWorldFuzzy:
         alive_cells = fuzzy_rules(alive_cells, world_size, p_fuzzy)
     next_world = set_to_grid(alive_cells, world_size)
-    reward = calculate_reward(next_world, group_size)
+    reward, done = calculate_reward(next_world, world_size, group_size)
     if np.array_equal(old_world, next_world):
         done = 1
     return reward, next_world, done

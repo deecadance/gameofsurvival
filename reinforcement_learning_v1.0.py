@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-
 ######################
 ####  PARAMETERS. ####
 ######################
-epochs = 100            ### Number of cycles
-max_steps = 500		 ### Max steps per epoch
+run = 1			### Index for saving figures
+epochs = 200             ### Number of cycles
+max_steps = 200		 ### Max steps per epoch
 world_size = 200         ### Linear dimensions of the (squared) world
 see_size = 20            ### DO NOT CHANGE. Dimension of the observable world.
                          ### If you change it: you have to change the DRL model input size
@@ -25,6 +25,7 @@ from IPython import display
 import numpy as np
 import matplotlib as mtplt
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 mtplt.use('Qt5Agg')
 import matplotlib.animation as animation
 import time
@@ -45,7 +46,6 @@ group = init_grid(group_size, filling)
 
 ### PLOT INITIAL STATE
 print("###STARTING WORLD CONFIGURATION###")
-#plt.ion()
 #plt.imshow(world)
 #plt.show(block=False)
 #time.sleep(2)
@@ -88,10 +88,9 @@ decay_factor = 0.999
 r_avg_list = []
 sight_index_1 = int((world_size-see_size)/2)
 sight_index_2 = int((world_size+see_size)/2)
+group_index_1 = int((world_size-group_size)/2)
+group_index_2 = int((world_size+group_size)/2)
 
-
-fig, ax = plt.subplots()
-plt.show(block=False)
 action = np.zeros(group_size*group_size)
 
 for i in range(epochs):
@@ -115,7 +114,7 @@ for i in range(epochs):
         alive_cells = grid_to_set(next_world)
         ### SECOND STEP: time evolution (including the action of the agent)
         ### RETURNS: the reward, the status of the world, and the variable "Done"
-        reward, next_world, done = time_step(alive_cells, world_size, IsWorldFuzzy, p_fuzzy)
+        reward, next_world, done = time_step(alive_cells, world_size, group_size, IsWorldFuzzy, p_fuzzy)
         ### UPDATE learner
         q_step = reward + y * np.max(player.predict(np.reshape(next_world[sight_index_1:sight_index_2,
                                                                sight_index_1:sight_index_2],
@@ -136,13 +135,22 @@ for i in range(epochs):
         if (j%(int(max_steps/4))==0):
             print(float(j)/max_steps*100, "% of steps done")
         ### PLOT WORLD STATUS
-        if i >= 0:
+        if (i == epochs-1):
+            print("Saving gameplay for the last epoch")
             alive_cells = grid_to_set(world)
-##            display.clear_output(wait=True)
-##            display.display(fig)
-##            time.sleep(0.00000001) 
-            ax.imshow(world)
-            fig.canvas.flush_events()
+            plt.ioff()
+            fig, ax = plt.subplots()
+            im = ax.imshow(world)
+            rect1 = patches.Rectangle((group_index_1,group_index_1),group_size,group_size,linewidth=1,edgecolor='r',facecolor='none')
+            rect2 = patches.Rectangle((sight_index_1,sight_index_1),see_size,see_size,linewidth=1,edgecolor='g',facecolor='none')
+            ax.add_patch(rect1)
+            ax.add_patch(rect2)
+            fig.colorbar(im)
+            name = './run_' + str(run) + '_epoch_' + str(i) + '_t_' + str(j) + '.png'
+            plt.savefig(name)
+            plt.close(fig)
         if done == 1:
             break
     r_avg_list.append(r_sum / epochs)
+
+player.save('player_v1.h5')
