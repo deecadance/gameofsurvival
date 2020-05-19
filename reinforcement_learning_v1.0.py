@@ -4,15 +4,16 @@
 ######################
 ####  PARAMETERS. ####
 ######################
+load_model = True       ### Load model or create from scratch?
 run = 1			 ### Index for saving figures
 epochs = 100             ### Number of cycles
-max_steps = 400		 ### Max steps per epoch
-world_size = 100         ### Linear dimensions of the (squared) world
+max_steps = 1000	 ### Max steps per epoch
+world_size = 200         ### Linear dimensions of the (squared) world
 see_size = 20            ### DO NOT CHANGE. Dimension of the observable world.
                          ### If you change it: you have to change the DRL model input size
 group_size = 6           ### DO NOT CHANGE. Linear dimensions of the (suqared) community
                          ### If you change it: you have to change the DRL model output size
-filling = 0.35	         ### How "full" the starting world is
+filling = 0.40	         ### How "full" the starting world is
 
 IsWorldFuzzy = False    ### "Fuzzy" world means that cells have a random chance of switching
 p_fuzzy = 1.0/world_size/world_size     ### Note that approx. P(1 switch) = world_size*world_size*p_fuzzy
@@ -57,34 +58,43 @@ import sys
 sys.path.append('/usr/local/lib/python3.7/site-packages')
 print(sys.path)
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, ZeroPadding2D, Flatten
-from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.models import Model, Sequential, load_model
 from tensorflow.keras.callbacks import TensorBoard
 from rl.agents.dqn import DQNAgent
 from rl.policy import EpsGreedyQPolicy
 from rl.memory import SequentialMemory
 
+if load_model:
+    print('Loading model :')
+    t0 = time.time()
+    player = load_model('player_v2.h5')
+    t1 = time.time()
+    print('Model loaded in: ', t1-t0)
+else:
+   player = Sequential()
+   player.add(Input(shape=(see_size, see_size,1)))
+   ## 20x20x1
+   player.add(Conv2D(16, (2, 2), activation='relu', padding='same'))
+   ## 20x20x16
+   player.add(MaxPooling2D((2, 2), padding='same'))
+   ## 10x10x16
+   player.add(Conv2D(36, (3, 3), activation='relu', padding='same'))
+   ## 10x10x36
+   player.add(MaxPooling2D((2, 2), padding='same'))
+   ## 5x5x36
+   player.add(Conv2D(36, (2, 2), activation='relu', padding='same'))
+   ## 5x5x36
+   player.add(MaxPooling2D((6, 6), padding='same', name='encoder'))
+   ## 1x1x36
+   player.add(Flatten())
+   player.compile(loss='mse', optimizer='adam', metrics=['mae'])
 
-player = Sequential()
-player.add(Input(shape=(see_size, see_size,1)))
-## 20x20x1
-player.add(Conv2D(16, (2, 2), activation='relu', padding='same'))
-## 20x20x16
-player.add(MaxPooling2D((2, 2), padding='same'))
-## 10x10x16
-player.add(Conv2D(36, (3, 3), activation='relu', padding='same'))
-## 10x10x36
-player.add(MaxPooling2D((2, 2), padding='same'))
-## 5x5x36
-player.add(Conv2D(36, (2, 2), activation='relu', padding='same'))
-## 5x5x36
-player.add(MaxPooling2D((6, 6), padding='same', name='encoder'))
-## 1x1x36
-player.add(Flatten())
-player.compile(loss='mse', optimizer='adam', metrics=['mae'])
 
 y = 0.95
 eps = 0.5
 decay_factor = 0.999
+
+max_t_list = []
 r_avg_list = []
 sight_index_1 = int((world_size-see_size)/2)
 sight_index_2 = int((world_size+see_size)/2)
@@ -106,7 +116,6 @@ for i in range(epochs):
     control_alive_percent = []
     world_alive_percent = []
     reward_history = []
-    max_t_list = []
     for j in range(max_steps):
         if np.random.random() < eps:
             action = np.argmax(np.random.random(group_size*group_size))
@@ -120,7 +129,7 @@ for i in range(epochs):
         alive_cells = grid_to_set(next_world)
         ### SECOND STEP: time evolution (including the action of the agent)
         ### RETURNS: the reward, the status of the world, and the variable "Done"
-        reward, next_world, done = time_step(alive_cells, world_size, group_size, IsWorldFuzzy, p_fuzzy)
+        reward, next_world, done = time_step(alive_cells, world_size, group_size, IsWorldFuzzy, p_fuzzy, j, max_steps)
         ### UPDATE learner
         q_step = reward + y * np.max(player.predict(np.reshape(next_world[sight_index_1:sight_index_2,
                                                                sight_index_1:sight_index_2],
@@ -169,8 +178,8 @@ for i in range(epochs):
             plt.close(fig)
         if done == 1:
             break
-    max_t_list.append(i)
-    r_avg_list.append(r_sum/epochs)
+    max_t_list.append(j)
+    r_avg_list.append(r_sum/j)
     name = 'epoch_' + str(i) + '_days_' + str(j) + '_metrics.txt'
     time_nparray = np.asarray(time)
     wap_nparray = np.asarray(world_alive_percent)
@@ -181,5 +190,8 @@ for i in range(epochs):
 header='step, world, group,control, reward')
 
 max_t_nparray = np.asarray(max_t_list)
+rew_avg_nparray = np.asarray(r_avg_list)
 np.savetxt('game_length.txt',np.transpose(max_t_nparray))
-player.save('player_v1.h5')
+np.savetxt('reward_avg.txt',np.transpose(rew_avg_nparray))
+
+player.save('player_v2.h5')
