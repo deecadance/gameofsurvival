@@ -6,13 +6,13 @@
 ######################
 run = 1			 ### Index for saving figures
 epochs = 200             ### Number of cycles
-max_steps = 500		 ### Max steps per epoch
-world_size = 50          ### Linear dimensions of the (squared) world
+max_steps = 300		 ### Max steps per epoch
+world_size = 100         ### Linear dimensions of the (squared) world
 see_size = 20            ### DO NOT CHANGE. Dimension of the observable world.
                          ### If you change it: you have to change the DRL model input size
 group_size = 6           ### DO NOT CHANGE. Linear dimensions of the (suqared) community
                          ### If you change it: you have to change the DRL model output size
-filling = 0.50	         ### How "full" the starting world is
+filling = 0.35	         ### How "full" the starting world is
 
 IsWorldFuzzy = False    ### "Fuzzy" world means that cells have a random chance of switching
 p_fuzzy = 1.0/world_size/world_size     ### Note that approx. P(1 switch) = world_size*world_size*p_fuzzy
@@ -106,6 +106,7 @@ for i in range(epochs):
     control_alive_percent = []
     world_alive_percent = []
     reward_history = []
+    max_t_list = []
     for j in range(max_steps):
         if np.random.random() < eps:
             action = np.argmax(np.random.random(group_size*group_size))
@@ -142,6 +143,7 @@ for i in range(epochs):
         control_alive_percent.append(control_alive_cells/group_size/group_size*100)
         world_alive_percent.append((world_alive_cells-group_alive_cells-control_alive_cells)/(world_size*world_size-2*group_size*group_size)*100)
         reward_history.append(reward)
+        x.append(j)
         ### INFORMATIVE MESSAGE
         if (j%(int(max_steps/4))==0):
             print(float(j)/max_steps*100, "% of steps done")
@@ -165,13 +167,17 @@ for i in range(epochs):
             plt.close(fig)
         if done == 1:
             break
-    r_avg_list.append(r_sum / epochs)
-    name = 'epoch_'+str(epoch)+'_metrics.txt'
-    x.append(j)
+    max_t_list.append(i)
+    r_avg_list.append(r_sum/epochs)
+    name = 'epoch_' + str(i) + '_days_' + str(j) + '_metrics.txt'
+    x_nparray = np.asarray(x)
     wap_nparray = np.asarray(world_alive_percent)
     gap_nparray = np.asarray(group_alive_percent)
     cap_nparray = np.asarray(control_alive_percent)
     rew_nparray = np.asarray(reward_history)
-    np.savetxt(name,np.column_stack([x,wap_nparray,gap_nparray,cap_nparray, rew_nparray],header='step, world, group,control')) 
+    np.savetxt(name,np.column_stack([x_nparray,wap_nparray,gap_nparray,cap_nparray, rew_nparray]),
+header='step, world, group,control, reward')
 
+max_t_nparray = np.asarray(max_t_list)
+np.savetxt('game_length.txt',np.column([max_t_nparray]))
 player.save('player_v1.h5')
