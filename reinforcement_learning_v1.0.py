@@ -5,8 +5,8 @@
 ####  PARAMETERS. ####
 ######################
 run = 1			 ### Index for saving figures
-epochs = 200             ### Number of cycles
-max_steps = 300		 ### Max steps per epoch
+epochs = 100             ### Number of cycles
+max_steps = 400		 ### Max steps per epoch
 world_size = 100         ### Linear dimensions of the (squared) world
 see_size = 20            ### DO NOT CHANGE. Dimension of the observable world.
                          ### If you change it: you have to change the DRL model input size
@@ -101,7 +101,7 @@ for i in range(epochs):
     done = False
     r_sum = 0
     done = 0
-    x = []
+    time = []
     group_alive_percent = []
     control_alive_percent = []
     world_alive_percent = []
@@ -143,7 +143,7 @@ for i in range(epochs):
         control_alive_percent.append(control_alive_cells/group_size/group_size*100)
         world_alive_percent.append((world_alive_cells-group_alive_cells-control_alive_cells)/(world_size*world_size-2*group_size*group_size)*100)
         reward_history.append(reward)
-        x.append(j)
+        time.append(j)
         ### INFORMATIVE MESSAGE
         if (j%(int(max_steps/4))==0):
             print(float(j)/max_steps*100, "% of steps done")
@@ -154,6 +154,8 @@ for i in range(epochs):
             plt.ioff()
             fig, ax = plt.subplots()
             im = ax.imshow(world)
+            ax.set_xlim(sight_index_1-5,sight_index_2+5)
+            ax.set_ylim(sight_index_1-5,sight_index_2+5)
             rect1 = patches.Rectangle((group_index_1,group_index_1),group_size,group_size,linewidth=1,edgecolor='r',facecolor='none')
             rect2 = patches.Rectangle((sight_index_1,sight_index_1),see_size,see_size,linewidth=1,edgecolor='g',facecolor='none')
             ax.add_patch(rect1)
@@ -170,14 +172,14 @@ for i in range(epochs):
     max_t_list.append(i)
     r_avg_list.append(r_sum/epochs)
     name = 'epoch_' + str(i) + '_days_' + str(j) + '_metrics.txt'
-    x_nparray = np.asarray(x)
+    time_nparray = np.asarray(time)
     wap_nparray = np.asarray(world_alive_percent)
     gap_nparray = np.asarray(group_alive_percent)
     cap_nparray = np.asarray(control_alive_percent)
     rew_nparray = np.asarray(reward_history)
-    np.savetxt(name,np.column_stack([x_nparray,wap_nparray,gap_nparray,cap_nparray, rew_nparray]),
+    np.savetxt(name,np.column_stack([time_nparray,wap_nparray,gap_nparray,cap_nparray, rew_nparray]),
 header='step, world, group,control, reward')
 
 max_t_nparray = np.asarray(max_t_list)
-np.savetxt('game_length.txt',np.column([max_t_nparray]))
+np.savetxt('game_length.txt',np.transpose(max_t_nparray))
 player.save('player_v1.h5')
