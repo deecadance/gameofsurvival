@@ -143,7 +143,7 @@ def calculate_reward(next_world, world_size, group_size):
         reward = -group_size*epochs
         done = 1
     else:
-        reward = np.sum(next_world[0:group_size,0:group_size])
+        reward = np.sum(next_world[group_index_1:group_index_2,group_index_1:group_index_2])
         done = 0
     return reward, done
 
@@ -171,3 +171,13 @@ def time_step(alive_cells, world_size, group_size, IsWorldFuzzy, p_fuzzy):
     if np.array_equal(old_world, next_world):
         done = 1
     return reward, next_world, done
+
+
+## FUNCTION WHICH ANALYZES DATA
+def counter(world,world_size,group_size):
+    grp_idx1 = int((world_size-group_size)/2)
+    grp_idx2 = int((world_size+group_size)/2)
+    group_alive_cells = np.sum(world[grp_idx1:grp_idx2,grp_idx1:grp_idx2])
+    control_alive_cells = np.sum(world[0:group_size,0:group_size])
+    world_alive_cells = np.sum(world) - group_alive_cells - control_alive_cells
+    return group_alive_cells, control_alive_cells, world_alive_cells

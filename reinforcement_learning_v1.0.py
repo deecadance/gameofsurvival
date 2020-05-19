@@ -4,10 +4,10 @@
 ######################
 ####  PARAMETERS. ####
 ######################
-run = 1			### Index for saving figures
+run = 1			 ### Index for saving figures
 epochs = 200             ### Number of cycles
-max_steps = 200		 ### Max steps per epoch
-world_size = 200         ### Linear dimensions of the (squared) world
+max_steps = 500		 ### Max steps per epoch
+world_size = 50          ### Linear dimensions of the (squared) world
 see_size = 20            ### DO NOT CHANGE. Dimension of the observable world.
                          ### If you change it: you have to change the DRL model input size
 group_size = 6           ### DO NOT CHANGE. Linear dimensions of the (suqared) community
@@ -37,7 +37,7 @@ start = time.time()
 
 from gameofsurvival_libraries import init_grid, grid_to_list, grid_to_set, list_to_grid, set_to_grid
 from gameofsurvival_libraries import get_neighbours, apply_rules, fuzzy_rules, calculate_action, time_step
-from gameofsurvival_libraries import alive_cells
+from gameofsurvival_libraries import alive_cells, counter
 
 
 ### Generate world and group at random
@@ -101,6 +101,11 @@ for i in range(epochs):
     done = False
     r_sum = 0
     done = 0
+    x = []
+    group_alive_percent = []
+    control_alive_percent = []
+    world_alive_percent = []
+    reward_history = []
     for j in range(max_steps):
         if np.random.random() < eps:
             action = np.argmax(np.random.random(group_size*group_size))
@@ -131,6 +136,12 @@ for i in range(epochs):
         ### THIRD STEP: save "old" configuration
         world = next_world
         alive_cells = grid_to_set(world)
+        ### SAVE DATA:
+        group_alive_cells, control_alive_cells, world_alive_cells = counter(world, world_size, group_size)
+        group_alive_percent.append(group_alive_cells/group_size/group_size*100)
+        control_alive_percent.append(control_alive_cells/group_size/group_size*100)
+        world_alive_percent.append((world_alive_cells-group_alive_cells-control_alive_cells)/(world_size*world_size-2*group_size*group_size)*100)
+        reward_history.append(reward)
         ### INFORMATIVE MESSAGE
         if (j%(int(max_steps/4))==0):
             print(float(j)/max_steps*100, "% of steps done")
@@ -145,6 +156,9 @@ for i in range(epochs):
             rect2 = patches.Rectangle((sight_index_1,sight_index_1),see_size,see_size,linewidth=1,edgecolor='g',facecolor='none')
             ax.add_patch(rect1)
             ax.add_patch(rect2)
+            x = int(action/group_size) + group_index_1
+            y = action%group_size + group_index_1
+            ax.scatter(x,y,c='cyan',marker='s',s=16)
             fig.colorbar(im)
             name = './run_' + str(run) + '_epoch_' + str(i) + '_t_' + str(j) + '.png'
             plt.savefig(name)
@@ -152,5 +166,12 @@ for i in range(epochs):
         if done == 1:
             break
     r_avg_list.append(r_sum / epochs)
+    name = 'epoch_'+str(epoch)+'_metrics.txt'
+    x.append(j)
+    wap_nparray = np.asarray(world_alive_percent)
+    gap_nparray = np.asarray(group_alive_percent)
+    cap_nparray = np.asarray(control_alive_percent)
+    rew_nparray = np.asarray(reward_history)
+    np.savetxt(name,np.column_stack([x,wap_nparray,gap_nparray,cap_nparray, rew_nparray],header='step, world, group,control')) 
 
 player.save('player_v1.h5')
