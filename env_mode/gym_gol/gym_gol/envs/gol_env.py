@@ -6,6 +6,8 @@ import pkg_resources
 import cfg_load
 
 from gym import error, spaces, utils
+
+from gym_gol.envs.gol_view_2d import GolView2D
 from gym.utils import seeding
 import numpy as np
 import time
@@ -19,8 +21,7 @@ logging.config.dictConfig(config["LOGGING"])
 
 class GolEnv(gym.Env):
   metadata = {'render.modes': ['human']}
- 
-  def __init__(self,epochs=200,world_size=50,group_size=4,see_size=20,filling=0.50,fixed_start=True,seed=42):
+  def __init__(self,epochs=200,world_size=50,group_size=4,see_size=20,filling=0.50,fixed_start=True,seed=42, max_iter=5000):
     self.__version__ = "0.0.1"
     logging.info(f"GolEnv - Version {self.__version__}")
     ### RUN VARIABLES         
@@ -29,7 +30,7 @@ class GolEnv(gym.Env):
     self.done = False               ## Exit variable
     self.epochs = epochs  			## How many epochs
     self.fixed_start = fixed_start  ## Bool: always start in the same config?
-
+    self.max_iter = max_iter
     ### WORLD VARIABLES
     self.world_size = world_size    ## World size for the world to evolve in
     self.group_size = group_size    ## Group size for the model to act on
@@ -39,29 +40,18 @@ class GolEnv(gym.Env):
     self.group_index_2 = int((self.world_size+self.group_size)/2)
     self.sight_index_1 = int((self.world_size-self.see_size)/2)
     self.sight_index_2 = int((self.world_size+self.see_size)/2)	
-##    print("*****DEBUG******")
-##    print(self.sight_index_1, self.sight_index_2)
     self.world = self._init_grid()  ## Constructing World
-    #print(self.world.shape)	    ## DEBUG
     self.next_world = self.world    ## World copy
     self.alive_cells = self._grid_to_set(self.world)  ## Transforming world into set represent
-	### AGENT VARIABLES
+    ### AGENT VARIABLES
     self.action_space = \
       spaces.Discrete(self.group_size*self.group_size) ## Discrete set of integers representing actions 
-    print("**************")
-    print("ACTION SPACE DIM")
-    print(self.action_space)
-    print("**************")
     self.observation_space = \
     spaces.Discrete(self.see_size*self.see_size)
-##     spaces.Box(low=0,high=1,shape=(self.see_size, self.see_size))  
-    print("**************")
-    print("OBSERVATION SPACE DIM")
-    print(self.observation_space)
-    print("**************")
-
     self.action_episode_memory = []
-
+    self.last_action = 0
+    ### VISUAL VARIABLES
+    self.visualization = None
   def step(self, action):
       """
       The agent takes a step in the environment.
@@ -77,34 +67,34 @@ class GolEnv(gym.Env):
           raise RuntimeError("Episode is done")
       else :
           self.curr_step += 1
-          self._take_action(action)   ### ACTION IS TAKEN
-          ### WORLD EVOLVES ###
-          self.alive_cells = self._grid_to_set(self.next_world)
-          self.next_world = self._set_to_grid(self.alive_cells, self.world_size)
-###          print("*******DEBUG******")
+          self._take_action(action)   ### ACTION IS TAKEN: changes self.next_world
+          self.alive_cells = self._grid_to_set(self.next_world)  ### WORLD EVOLVES: switch to alive_cells rep.
+          self._apply_rules()					 ### WORLD EVOLVES: apply rules to alive_cells
+          self.next_world = self._set_to_grid(self.alive_cells, self.world_size)  ### WORLD EVOLVES: back to grid rep.
           reward = self._get_reward()
           observation = self.next_world[self.sight_index_1:self.sight_index_2,self.sight_index_1:self.sight_index_2]
-###          print("**********DEBUG**********")
-###          print(observation)
-###          print(reward)
-###          print(self.done)
-###          print({})
-###          print("************DEBUG*********")
-          return observation, reward, self.done, {}
+          self.world = self.next_world
+          return observation, reward, self.done, {"Filling": self.filling, "Action": action, "Done": self.done}
 
   def _take_action(self, action): ### Here the action is taken, and the world is evolved.
     ### Add current action to memory ###
+    self.last_action = action
     self.action_episode_memory[self.curr_episode].append(action)
     x = int(action/self.group_size) + self.group_index_1
     y = action%self.group_size + self.group_index_1
+    self.next_world = self.world
     self.next_world[x,y] = (self.world[x,y]+1)%2
          
   def _get_reward(self):
     if not np.any(self.next_world[self.group_index_1:self.group_index_2,self.group_index_1:self.group_index_2]):
-      self.done = 1
-      return -self.group_size*self_group_size*10
+      self.done = True
+      return -self.group_size*self.group_size*(self.max_iter - self.curr_step)/100
+    elif (self.curr_step >= self.max_iter) :
+      self.done = True
+      print("Survived until the end!!")
+      return self.max_iter*self.group_size*self.group_size
     else:
-      self.done = 0
+      self.done = False
       return np.sum(self.next_world[self.group_index_1:self.group_index_2,self.group_index_1:self.group_index_2])
 
   def reset(self):
@@ -119,9 +109,19 @@ class GolEnv(gym.Env):
   ### Initialize Game of Life World ###
   def _init_grid(self):
     return np.random.choice([0,1], self.world_size*self.world_size, 
-          p=[1-self.filling, self.filling]).reshape(self.world_size,self.world_size)
+          p=[1-self.filling, self.filling]).reshape(self.world_size,self.world_size).astype(int)
 
   def render(self, mode='human'):
+      if mode == 'text' :
+          with np.printoptions(threshold=np.inf):
+              print("Group at step", self.curr_step)
+              print(self.next_world)
+      if mode == 'human' :
+        if self.visualization == None:
+          self.visualization = GolView2D(gol_file_path=None, world_size = self.world_size, group_size = self.group_size, see_size = self.see_size, enable_render = True, world = self.world, sight_index_1 = self.sight_index_1, sight_index_2 = self.sight_index_2, group_index_1 = self.group_index_1, group_index_2 = self.group_index_2, action = self.last_action, curr_episode = self.curr_episode,
+curr_step = self.curr_step) 
+        if self.curr_step > 0:
+          self.visualization.render(self.next_world, self.curr_step, self.curr_episode, self.last_action)
       return
   
   def seed(self, seed):
@@ -162,16 +162,17 @@ class GolEnv(gym.Env):
         new_grid[row_indices,col_indices] = 1
         return new_grid
 
-  def _get_neighbours(element, world_size):
+  def _get_neighbours(self,  element):
     l = []
-    l.append( ( (element[0]-1)%world_size, (element[1]  )%world_size ) )
-    l.append( ( (element[0]-1)%world_size, (element[1]+1)%world_size ) )
-    l.append( ( (element[0]-1)%world_size, (element[1]-1)%world_size ) )
-    l.append( ( (element[0]  )%world_size, (element[1]+1)%world_size ) )
-    l.append( ( (element[0]  )%world_size, (element[1]-1)%world_size ) )
-    l.append( ( (element[0]+1)%world_size, (element[1]+1)%world_size ) )
-    l.append( ( (element[0]+1)%world_size, (element[1]-1)%world_size ) )
-    l.append( ( (element[0]+1)%world_size, (element[1]  )%world_size ) )
+    l.append( ( (element[0]-1)%self.world_size, (element[1]  )%self.world_size ) )
+    l.append( ( (element[0]-1)%self.world_size, (element[1]+1)%self.world_size ) )
+    l.append( ( (element[0]-1)%self.world_size, (element[1]-1)%self.world_size ) )
+    l.append( ( (element[0]  )%self.world_size, (element[1]+1)%self.world_size ) )
+    l.append( ( (element[0]  )%self.world_size, (element[1]-1)%self.world_size ) )
+    l.append( ( (element[0]+1)%self.world_size, (element[1]+1)%self.world_size ) )
+    l.append( ( (element[0]+1)%self.world_size, (element[1]-1)%self.world_size ) )
+    l.append( ( (element[0]+1)%self.world_size, (element[1]  )%self.world_size ) )
+##    print("Neighbours: ", l)
     return l
 
   ## SET OF RULES ON SPARSE SET
@@ -180,7 +181,7 @@ class GolEnv(gym.Env):
       for cell in self.alive_cells:
           if cell not in counter: ## You don't want to look twice at the same cell
               counter[cell] = 0   ## Initialize counter for alive cells
-          neighbours = _get_neighbours(cell, self.world_size) ## Obtain a LIST containing the coordinates of neighbours
+          neighbours = self._get_neighbours(cell) ## Obtain a LIST containing the coordinates of neighbours
           for n in neighbours:
               if n not in counter: ## Cells not in the counter are currently dead
                   counter[n] = 1   ## Initialize them with 1 (the current neighbour)

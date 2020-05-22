@@ -6,7 +6,7 @@
 ######################
 do_load_model = False       ### Load model or create from scratch?
 model_name = 'player_v3.h5'
-fixed_start = True      ### Always start from same config?
+fixed_start = False      ### Always start from same config?
 run = 1			 ### Index for saving figures
 epochs = 500             ### Number of cycles
 max_steps = 200 	 ### Max steps per epoch
@@ -40,62 +40,64 @@ from matplotlib import rc
 import random
 random.seed(seed)
 
+import tensorflow as tf
+from tensorflow.python.framework.ops import disable_eager_execution
+
+disable_eager_execution()
 
 ### IMPORTING KERAS MODULES!
 import sys
 sys.path.append('/usr/local/lib/python3.7/site-packages')
 print(sys.path)
 from keras.layers import Input, Conv2D, MaxPooling2D, ZeroPadding2D, Flatten, Dense
-from keras.models import Model, Sequential, load_model
+from keras.models import Model, Sequential
 from keras.optimizers import Adam
 import gym
 gol_env = gym.make('gym_gol:gol-v0')
 from rl.agents.dqn import DQNAgent
 from rl.policy import EpsGreedyQPolicy, LinearAnnealedPolicy
 from rl.memory import SequentialMemory
+from rl.callbacks import Visualizer
 
-if do_load_model:
-    print('Loading model :')
-    t0 = time.time()
-    player = load_model(model_name)
-    t1 = time.time()
-    print('Model loaded in: ', t1-t0)
-else:
-   player_input = Input(shape=(1,see_size, see_size))
-   ## 20x20x1
-   x = Conv2D(16, (2, 2), activation='relu', padding='same')(player_input)
-   ## 20x20x16
-   x = MaxPooling2D((2, 2), padding='same')(x)
-   ## 10x10x16
-   x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-   ## 10x10x16
-   x = MaxPooling2D((2, 2), padding='same')(x)
-   ## 5x5x16
-   x = Conv2D(16, (2, 2), activation='relu', padding='same')(x)
-   ## 5x5x16
-   x = MaxPooling2D((5, 5), padding='same', name='encoder')(x)
-   ## 1x1x16
-   x = Flatten()(x)
-   x = Dense(16, activation = 'relu')(x)  ## Dense layer with 16 nodes
-   player_output = Dense(16, activation = 'relu')(x) ## Final layer with 16 output nodes
-   model = Model(inputs=player_input, outputs=player_output)
-   print(model.summary())   ## DEBUG
+player_input = Input(shape=(1,see_size, see_size))
+## 20x20x1
+x = Conv2D(16, (2, 2), activation='relu', padding='same')(player_input)
+## 20x20x16
+x = MaxPooling2D((2, 2), padding='same')(x)
+## 10x10x16
+x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+## 10x10x16
+x = MaxPooling2D((2, 2), padding='same')(x)
+## 5x5x16
+x = Conv2D(16, (2, 2), activation='relu', padding='same')(x)
+## 5x5x16
+x = MaxPooling2D((5, 5), padding='same', name='encoder')(x)
+## 1x1x16
+x = Flatten()(x)
+x = Dense(16, activation = 'relu')(x)  ## Dense layer with 16 nodes
+player_output = Dense(16, activation = 'relu')(x) ## Final layer with 16 output nodes
+model = Model(inputs=player_input, outputs=player_output)
+print(model.summary())   ## DEBUG
 
 gol_env.seed(seed)
 world = gol_env.reset()
-print(world)
+gol_env.render(mode='human')
 y = 0.95
 eps = 0.5
 decay_factor = 0.999
-
-memory = SequentialMemory(limit=10000, window_length=1)
-policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05, nb_steps=10000)
-player = DQNAgent(model=model, nb_actions=16, memory=memory, nb_steps_warmup=50,
+train_steps = 500000
+memory = SequentialMemory(limit=20000, window_length=1)
+policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1.0, value_min=.05, value_test=.025, nb_steps=train_steps)
+player = DQNAgent(model=model, nb_actions=16, memory=memory, nb_steps_warmup=1000,
                target_model_update=1e-2, policy=policy)
 
 player.compile(Adam(lr=1e-3),metrics=['mae'])
-player.fit(gol_env, nb_steps=5000, visualize=False, verbose=1)
-player.test(gol_env, nb_episodes=5, visualize=False, verbose=1)
+if do_load_model:
+  player.load_weights('player_v1.2_gol_env_weights.h5f'.format())
 
-player.save(model_name)
+player.fit(gol_env, nb_steps=train_steps, visualize=False, verbose=1)
+
+player.save_weights('player_v1.2_{}_weights.h5f'.format('gol_env'), overwrite=True)
+player.test(gol_env, nb_episodes=1, visualize=True, verbose=1)
+
 exit()
